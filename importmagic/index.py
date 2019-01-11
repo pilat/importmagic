@@ -404,6 +404,9 @@ class SymbolVisitor(ast.NodeVisitor):
 
     def visit_ImportFrom(self, node):
         for name in node.names:
+            if name.asname and not name.asname.startswith('_'):
+                self._tree.add(name.asname, 1.1)
+                continue
             if name.name == '*' or name.name.startswith('_'):
                 continue
             self._tree.add(name.name, 0.25)
