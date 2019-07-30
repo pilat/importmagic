@@ -77,7 +77,7 @@ class SymbolIndex(object):
                  blacklist_re=None, locations=None):
         self._name = name
         self._tree = {}
-        self._exports = {}
+        self._exports = None
         self._parent = parent
         if blacklist_re:
             self._blacklist_re = blacklist_re
@@ -295,7 +295,11 @@ class SymbolIndex(object):
             node = node._parent
         return '.'.join(reversed(path))
 
+    def set_explicit_exports(self):
+        self._exports = self._exports or {}  # It hasn't None yet
+
     def add_explicit_export(self, name, score):
+        assert self._exports is not None, 'Initialized _exports variable expected'
         self._exports[name] = score
         self.add(name, score)
 
@@ -343,10 +347,12 @@ class SymbolIndex(object):
                     alias = self.find(alias_path)
                     alias._tree = tree._tree
         yield tree
-        if tree._exports:
-            # Delete unexported variables
+        if tree._exports is not None:
+            # Delete unexported variables. But keeps submodules
             for key in set(tree._tree) - set(tree._exports):
-                del tree._tree[key]
+                value = tree._tree.get(key)
+                if value is None or type(value) is float:
+                    del tree._tree[key]
 
     def serialize(self, fd=None):
         if fd is None:
@@ -430,6 +436,7 @@ class SymbolVisitor(ast.NodeVisitor):
         is_name = lambda n: isinstance(n, ast.Name)
         for name in filter(is_name, node.targets):
             if name.id == '__all__' and isinstance(node.value, ast.List):
+                self._tree.set_explicit_exports()
                 for subnode in node.value.elts:
                     if isinstance(subnode, ast.Str):
                         self._tree.add_explicit_export(subnode.s, 1.2)
